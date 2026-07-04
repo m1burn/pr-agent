@@ -19,7 +19,7 @@ from pr_agent.algo.ai_handlers.base_ai_handler import BaseAiHandler
 from pr_agent.algo.ai_handlers.litellm_helpers import (
     MockResponse, _get_azure_ad_token, _handle_streaming_response,
     _process_litellm_extra_body)
-from pr_agent.algo.utils import ReasoningEffort, get_version
+from pr_agent.algo.utils import ReasoningEffort, get_max_tokens, get_version
 from pr_agent.config_loader import get_settings
 from pr_agent.log import get_logger
 
@@ -531,6 +531,13 @@ class LiteLLMAIHandler(BaseAiHandler):
                         "timeout": get_settings().config.ai_timeout,
                         "api_base": api_base,
                     }
+
+                # Add max_tokens to ensure the model allocates enough output budget.
+                if "max_tokens" not in kwargs:
+                    try:
+                        kwargs["max_tokens"] = get_max_tokens(user_model)
+                    except Exception:
+                        pass
 
                 # Add temperature only if model supports it
                 if model not in self.no_support_temperature_models and not get_settings().config.custom_reasoning_model:

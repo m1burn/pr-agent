@@ -143,7 +143,9 @@ class TestOpenRouterControls:
             "max_tokens": 16000,
         })
         assert "extra_body" not in kwargs
-        assert "max_tokens" not in kwargs
+        # max_tokens is now injected globally for all models via get_max_tokens,
+        # so it is present, but its value is NOT the openrouter-configured one.
+        assert kwargs["max_tokens"] == 32000  # default for gpt-4o, not 16000
 
     @pytest.mark.asyncio
     async def test_invalid_reasoning_effort_ignored(self, monkeypatch):

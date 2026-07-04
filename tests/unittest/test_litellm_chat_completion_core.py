@@ -22,6 +22,7 @@ class FakeSettings:
             reasoning_effort=None,
             ai_timeout=30,
             custom_reasoning_model=False,
+            custom_model_max_tokens=32000,
             max_model_tokens=32000,
             verbosity_level=0,
             model="gpt-4o",
@@ -142,7 +143,6 @@ async def test_chat_completion_does_not_use_extended_thinking_for_claude_opus_4_
         await handler.chat_completion(model="claude-opus-4-8", system="sys", user="usr", temperature=0.2)
 
     assert "thinking" not in mock_call.call_args.kwargs
-    assert "max_tokens" not in mock_call.call_args.kwargs
     assert "temperature" not in mock_call.call_args.kwargs
 
 
@@ -161,7 +161,6 @@ async def test_chat_completion_does_not_use_extended_thinking_for_claude_sonnet_
         await handler.chat_completion(model="claude-sonnet-5", system="sys", user="usr", temperature=0.2)
 
     assert "thinking" not in mock_call.call_args.kwargs
-    assert "max_tokens" not in mock_call.call_args.kwargs
     assert "temperature" not in mock_call.call_args.kwargs
 
 
