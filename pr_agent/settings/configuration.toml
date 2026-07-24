@@ -290,6 +290,11 @@ push_commands = [
     "/describe",
     "/review",
 ]
+# Polling configuration
+polling_enabled = false
+polling_interval = 30
+project_path = ""
+polling_data_dir = "/var/lib/pr-agent/poller"
 # Configure SSL validation for GitLab. Can be either set to the path of a custom CA or disabled entirely.
 # ssl_verify = true
 

@@ -97,6 +97,84 @@ PORT=3000  # Optional: override the webhook server port
 
 9. Test your installation by opening a merge request or commenting on a merge request using one of PR Agent's commands.
 
+## Run a GitLab polling server (alternative to webhooks)
+
+If you can't expose a public webhook endpoint (for example, behind a strict firewall, on a private network, or in an air-gapped environment), PR-Agent can poll your GitLab project for new MR comments instead of receiving webhook deliveries. The polling loop runs inside the same `gitlab_webhook` Docker image and starts automatically when enabled.
+
+> **Note:** Polling is **disabled by default**. The webhook flow described above remains the recommended setup when you can expose a public endpoint. Use polling only when webhooks are not an option.
+
+### How polling works
+
+- On startup, the server begins polling all **open** merge requests in the project configured by `gitlab.project_path`.
+- Every `polling_interval` seconds (default 30), it fetches recent notes for each open MR and looks for comments whose body starts with `/` (for example, `/review`, `/describe`, `/ask`).
+- Comments from bot users (per `config.bot_user_indicators`) are skipped.
+- Each comment is processed at most once per deployment lifetime. Processed comment IDs are tracked in a local JSON file (`processed_comments.json`) so restarts don't re-process old comments.
+- After a command runs successfully, the comment is **deleted** from the MR. If the command fails, the comment is **left in place** for manual inspection and is not retried.
+
+### Auto-review behavior
+
+In addition to processing command comments, the polling loop automatically runs `gitlab.pr_commands` on newly seen MRs that were created after the application started, so MRs receive an initial review without anyone having to type a `/review` comment. MRs that already existed when the poller started are recorded in state but not reviewed retroactively. The poller tracks which MRs it has already reviewed in a separate state file (`processed_mrs.json`) keyed by MR IID and head SHA, so the same MR is not re-reviewed at the same commit.
+
+- **New MRs** (not yet in `processed_mrs.json` and created after the poller started) trigger `gitlab.pr_commands` automatically.
+- **Push-triggered reviews** (when the head SHA changes between cycles) only run `gitlab.push_commands` if `gitlab.handle_push_trigger = true`. With the default `false`, a new commit is recorded but no commands run.
+- **Draft MRs** are skipped and removed from `processed_mrs.json`, so flipping a draft back to ready re-triggers `pr_commands` on the next cycle.
+- **Closed MRs** are forgotten (pruned from `processed_mrs.json` each cycle), so reopening an MR re-triggers `pr_commands` as if it were new.
+- **Bot-author MRs** are recorded in `processed_mrs.json` without running commands, so they are not re-evaluated every cycle.
+
+The MR state file (`processed_mrs.json`) is distinct from the comment dedup file (`processed_comments.json`); both live under `polling_data_dir`.
+
+### Configuration
+
+Add the following keys under the `[gitlab]` section of your configuration file (for example, `.pr_agent.toml`):
+
+```toml
+[gitlab]
+# ... existing settings (url, personal_access_token, shared_secret, ...) ...
+
+# Polling configuration
+polling_enabled = false          # set to true to enable polling mode
+polling_interval = 30            # seconds between poll cycles
+project_path = ""                # e.g. "my-group/my-project" (required when polling is enabled)
+polling_data_dir = "/var/lib/pr-agent/poller"  # where processed_comments.json is stored
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `polling_enabled` | `false` | When `true`, the server starts the polling loop on startup. |
+| `polling_interval` | `30` | Seconds to wait between poll cycles. Lower values increase GitLab API usage. |
+| `project_path` | `""` | The GitLab project to poll, in `group/project` form. Required when polling is enabled. |
+| `polling_data_dir` | `"/var/lib/pr-agent/poller"` | Directory where the dedup file (`processed_comments.json`) and the MR state file (`processed_mrs.json`) are written. Use a persistent path in production. |
+
+### Deployment
+
+> **Important:** Polling mode **requires `GUNICORN_WORKERS=1`**. Running multiple workers would cause duplicate processing because each worker would poll independently. The server enforces this at startup and exits with an error if `GUNICORN_WORKERS` is greater than 1.
+
+Set the environment variable before starting the container:
+
+```bash
+export GUNICORN_WORKERS=1
+```
+
+Or, if you use a Gunicorn config file, set `workers = 1` there. Then start the server as usual:
+
+```bash
+docker run -e GUNICORN_WORKERS=1 \
+  -e CONFIG__GIT_PROVIDER=gitlab \
+  -e GITLAB__PERSONAL_ACCESS_TOKEN=<personal_access_token> \
+  -e GITLAB__URL=https://gitlab.com \
+  -e OPENAI__KEY=<your_openai_api_key> \
+  -p 3000:3000 \
+  pragent/pr-agent:gitlab_webhook
+```
+
+The same `personal_access_token` used for webhook mode is reused for polling. No additional GitLab setup (webhook URL, secret token) is required.
+
+### DiffNote limitations
+
+> **Note:** Polling may not fully support `/ask` on diff lines (DiffNote comments). When a comment is attached to a specific line in a diff, the polling loop attempts to rewrite `/ask` into `/ask_line` with positional arguments, but the position data exposed by the GitLab API through `python-gitlab` can be incomplete or inconsistent. If the rewrite fails, the comment is skipped and left on the MR for manual handling. Treat DiffNote `/ask` support in polling mode as **best-effort** rather than guaranteed.
+
+For reliable `/ask` on diff lines, prefer the webhook flow, which has full access to the original note payload.
+
 ## Deploy as a Lambda Function
 
 Note that since AWS Lambda env vars cannot have "." in the name, you can replace each "." in an env variable with "__".<br>

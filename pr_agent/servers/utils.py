@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+import json
+import os
 import time
 from collections import defaultdict
 from typing import Any, Callable
@@ -84,3 +86,49 @@ class DefaultDictWithTimeout(defaultdict):
     def __delitem__(self, __key):
         del self.__key_times[__key]
         return super().__delitem__(__key)
+
+
+def _load_processed_comments(path: str) -> dict[str, str]:
+    """Load processed-comments state from a JSON file.
+
+    Args:
+        path: Filesystem path to the JSON file holding the processed-comments map.
+
+    Returns:
+        The deserialized mapping of comment IDs to ISO timestamps. Returns an empty
+        dict if the file does not exist or cannot be parsed.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _save_processed_comments(path: str, processed: dict[str, str]) -> None:
+    """Persist processed-comments state to a JSON file atomically.
+
+    Writes to a sibling ``.tmp`` file first and then ``os.replace``s it onto the
+    target path so concurrent readers never observe a partially written file.
+    If the mapping exceeds 10000 entries, the oldest entries (by ISO timestamp
+    value) are evicted so only the 10000 newest remain.
+
+    Args:
+        path: Destination file path. Parent directories are created if missing.
+        processed: Mapping of comment IDs to ISO timestamps to persist.
+    """
+    if len(processed) > 10000:
+        sorted_items = sorted(processed.items(), key=lambda kv: kv[1])
+        processed = dict(sorted_items[-10000:])
+
+    parent_dir = os.path.dirname(path)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(processed, f, indent=2)
+    os.replace(tmp_path, path)
