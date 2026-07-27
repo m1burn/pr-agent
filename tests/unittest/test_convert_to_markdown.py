@@ -114,7 +114,7 @@ class TestConvertToMarkdown:
             <table>
             <tr><td>⚡&nbsp;<strong>Recommended focus areas for review</strong><br><br>
 
-            <a href='{reference_link}'><strong>Code Smell</strong></a><br>The function is too long and complex.
+            <a href='{reference_link}'><strong>Code Smell</strong></a> <em>src/utils.py:30-50</em><br>The function is too long and complex.
 
             </td></tr>
             </table>
