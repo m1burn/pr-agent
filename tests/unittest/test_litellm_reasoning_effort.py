@@ -13,6 +13,7 @@ def create_mock_settings(reasoning_effort_value):
             'reasoning_effort': reasoning_effort_value,
             'ai_timeout': 120,
             'custom_reasoning_model': False,
+            'custom_model_max_tokens': 32000,
             'max_model_tokens': 32000,
             'verbosity_level': 0,
             'get': lambda self, key, default=None: default
