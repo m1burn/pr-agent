@@ -24,7 +24,7 @@ import os
 #
 
 # bind = '0.0.0.0:5000'
-bind = '0.0.0.0:3000'
+bind = f"0.0.0.0:{int(os.environ.get('PORT', '3000'))}"
 backlog = 2048
 
 #
