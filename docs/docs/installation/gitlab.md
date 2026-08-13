@@ -102,6 +102,70 @@ PORT=3000  # Optional: override the webhook server port
 
 10. The webhook server runs under gunicorn with multiple worker processes. See [Sizing a self-hosted webhook server](./index.md#sizing-a-self-hosted-webhook-server) for the `GUNICORN_WORKERS` / `GUNICORN_MAX_WORKERS` knobs and memory guidance — worth reading before setting a memory limit.
 
+## Run a GitLab polling server (alternative to webhooks)
+
+If you can't expose a public webhook endpoint (for example, behind a strict firewall, on a private network, or in an air-gapped environment), PR-Agent can poll your GitLab projects instead of receiving webhook deliveries.
+
+Polling is a **separate, optional process** — the `gitlab_polling` Docker target — so enabling or disabling it is just starting or stopping that container. The webhook server needs no changes (the poller reuses its filtering and command logic read-only) and keeps its normal worker sizing. Both are pure transports to the same PRAgent core: the poller mirrors the webhook's handling (same commands, same eyes-reaction feedback, same filtering), so PR-Agent behaves identically no matter how events arrive.
+
+### How polling works
+
+- Every `polling_interval` seconds (default 30), the poller lists the **open** merge requests of every configured project.
+- MRs whose `updated_at` didn't change since the last cycle are skipped (a new comment always bumps `updated_at`), so idle MRs cost no API calls.
+- New command comments (body starting with `/`, e.g. `/review`, `/describe`, `/ask`) are delivered to PR-Agent exactly as if a webhook had delivered them, including the eyes reaction on pickup.
+- A successfully processed comment gets a ✅ (`white_check_mark`) reaction from the bot. A failed comment keeps only the 👀 and is retried up to `polling_max_comment_retries` times; after that it stays marked — delete the 👀 reaction on the MR to re-queue it.
+- Because the dedup marker lives on the comment itself (not on disk), a comment already delivered via webhook is never re-delivered by the poller and vice versa. Both transports may run at the same time safely.
+- Comments are never deleted: full webhook parity, and the MR keeps its audit trail.
+
+### Auto-review behavior
+
+The poller tracks every open MR's head SHA and draft flag in a per-project state file under `polling_data_dir`:
+
+- **First-ever poll cycle** records all currently open MRs without reviewing them, so existing MRs are never reviewed retroactively.
+- **Newly seen MRs** (opened — or reopened — after that first cycle) trigger `gitlab.pr_commands`, unless they are drafts or authored by a bot (per `config.bot_user_indicators`).
+- **Push-triggered reviews** (head SHA changed between cycles) run `gitlab.push_commands` only if `gitlab.handle_push_trigger = true`.
+- **Draft MRs** fire nothing while draft; flipping a draft to ready triggers `gitlab.pr_commands`, matching the webhook's draft-ready behavior.
+- **Closed MRs** are pruned from state each cycle, so reopening an MR treats it as new.
+
+### Configuration
+
+Add the following keys under the `[gitlab]` section of your configuration file (for example, `.pr_agent.toml`):
+
+```toml
+[gitlab]
+# ... existing settings (url, personal_access_token, ...) ...
+
+polling_interval = 30
+polling_projects = ["my-group/my-project", "other-group/other-project"]
+polling_data_dir = "/var/lib/pr-agent-poller"
+polling_max_comment_retries = 2
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `polling_projects` | `[]` | List of GitLab projects to poll, in `group/project` form. |
+| `polling_interval` | `30` | Seconds to wait between poll cycles. Lower values increase GitLab API usage. |
+| `polling_data_dir` | `"/var/lib/pr-agent-poller"` | Directory for per-project state files and the leader lock. Use a persistent path in production. |
+| `polling_max_comment_retries` | `2` | Automatic retries for a failed command comment before it stays marked with 👀. |
+
+### Deployment
+
+Build (or pull) the `gitlab_polling` target and run it next to — or instead of — the webhook container:
+
+```bash
+docker run -e CONFIG__GIT_PROVIDER=gitlab   -e GITLAB__PERSONAL_ACCESS_TOKEN=<personal_access_token>   -e GITLAB__URL=https://gitlab.com   -e GITLAB__POLLING_PROJECTS='["my-group/my-project"]'   -e OPENAI__KEY=<your_openai_api_key>   -v pr-agent-poller:/var/lib/pr-agent-poller   pragent/pr-agent:gitlab_polling
+```
+
+The same `personal_access_token` used for webhook mode is reused for polling; the token needs permission to add award emoji. No webhook URL or secret token is required.
+
+Running more than one poller instance is safe: instances coordinate through a file lock in `polling_data_dir`, so only one is active at a time and the others stand by (when sharing the volume). Enabling or disabling polling is simply starting or stopping the container — no other component needs reconfiguring.
+
+### DiffNote limitations
+
+> **Note:** Polling may not fully support `/ask` on diff lines (DiffNote comments). When a comment is attached to a specific line in a diff, the polling loop rewrites `/ask` into `/ask_line` with positional arguments, but the position data exposed by the GitLab API through `python-gitlab` can be incomplete or inconsistent. If the rewrite fails, the comment is left on the MR for manual handling. Treat DiffNote `/ask` support in polling mode as **best-effort** rather than guaranteed.
+
+For reliable `/ask` on diff lines, prefer the webhook flow, which has full access to the original note payload.
+
 ## Deploy as a Lambda Function
 
 Note that since AWS Lambda env vars cannot have "." in the name, you can replace each "." in an env variable with "__".<br>

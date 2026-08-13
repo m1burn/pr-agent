@@ -324,7 +324,7 @@ def handle_ask_line(body, data):
         # else:
         #     start_line = line_range_['start']['old_line']
         #     end_line = line_range_['end']['old_line']
-        question = body.replace('/ask', '').strip()
+        question = body.replace('/ask', '', 1).strip()
         path = data['object_attributes']['position']['new_path']
         side = 'RIGHT'  # if line_range_['start']['type'] == 'new' else 'LEFT'
         comment_id = data['object_attributes']["discussion_id"]

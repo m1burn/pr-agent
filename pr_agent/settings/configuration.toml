@@ -303,6 +303,11 @@ push_commands = [
     "/describe",
     "/review",
 ]
+# Polling configuration (standalone gitlab_polling server, see docs/docs/installation/gitlab.md)
+polling_interval = 30
+polling_projects = []   # e.g. ["group/project-a", "group/project-b"]
+polling_data_dir = "/var/lib/pr-agent-poller"
+polling_max_comment_retries = 2
 # Configure SSL validation for GitLab. Can be either set to the path of a custom CA or disabled entirely.
 # ssl_verify = true
 

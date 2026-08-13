@@ -29,6 +29,10 @@ FROM base AS gitlab_webhook
 ADD pr_agent pr_agent
 CMD ["python", "-m", "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-c", "pr_agent/servers/gunicorn_config.py", "--forwarded-allow-ips", "*", "pr_agent.servers.gitlab_webhook:app"]
 
+FROM base AS gitlab_polling
+ADD pr_agent pr_agent
+CMD ["python", "pr_agent/servers/gitlab_polling.py"]
+
 FROM base AS azure_devops_webhook
 ADD pr_agent pr_agent
 CMD ["python", "pr_agent/servers/azuredevops_server_webhook.py"]
