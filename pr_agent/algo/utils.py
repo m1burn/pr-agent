@@ -361,6 +361,7 @@ def convert_to_markdown_v2(output_data: dict,
                         valid_lines = start_line > 0 and end_line >= start_line
                         relevant_lines_str = extract_relevant_lines_str(
                             end_line, files, relevant_file, start_line, dedent=True) if valid_lines else ""
+                        file_line = f"{relevant_file}:{start_line}-{end_line}" if relevant_file and valid_lines else ""
                         if git_provider and valid_lines:
                             reference_link = git_provider.get_line_link(relevant_file, start_line, end_line)
                         else:
@@ -371,22 +372,25 @@ def convert_to_markdown_v2(output_data: dict,
                                 if relevant_lines_str:
                                     issue_str = (
                                         f"<details><summary><a href='{reference_link}'>"
-                                        f"<strong>{issue_header}</strong></a>\n\n"
+                                        f"<strong>{issue_header}</strong></a> <em>{file_line}</em>\n\n"
                                         f"{issue_content}\n</summary>\n\n"
                                         f"{relevant_lines_str}\n\n</details>"
                                     )
                                 else:
                                     issue_str = (
                                         f"<a href='{reference_link}'>"
-                                        f"<strong>{issue_header}</strong></a><br>{issue_content}"
+                                        f"<strong>{issue_header}</strong></a> <em>{file_line}</em><br>{issue_content}"
                                     )
                             else:
-                                issue_str = f"<strong>{issue_header}</strong><br>{issue_content}"
+                                issue_str = f"<strong>{issue_header}</strong> <em>{file_line}</em><br>{issue_content}"
                         else:
                             if reference_link is not None and len(reference_link) > 0:
-                                issue_str = f"[**{issue_header}**]({reference_link})\n\n{issue_content}\n\n"
+                                issue_str = (
+                                    f"[**{issue_header}**]({reference_link}) <em>{file_line}</em>"
+                                    f"\n\n{issue_content}\n\n"
+                                )
                             else:
-                                issue_str = f"**{issue_header}**\n\n{issue_content}\n\n"
+                                issue_str = f"**{issue_header}** <em>{file_line}</em>\n\n{issue_content}\n\n"
                         markdown_text += f"{issue_str}\n\n"
                     except Exception as e:
                         get_logger().exception(f"Failed to process 'Recommended focus areas for review': {e}")

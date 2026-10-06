@@ -114,6 +114,10 @@ class TestConvertToMarkdown:
         mock_git_provider = Mock()
         reference_link = 'https://github.com/qodo/pr-agent/pull/1/files#diff-hashvalue-R174'
         mock_git_provider.get_line_link.return_value = reference_link
+        issue_line = (
+            f"<a href='{reference_link}'><strong>Code Smell</strong></a> "
+            f"<em>src/utils.py:30-50</em><br>The function is too long and complex."
+        )
 
         expected_output = textwrap.dedent(f"""\
             ## PR Reviewer Guide 🔍
@@ -123,7 +127,7 @@ class TestConvertToMarkdown:
             <table>
             <tr><td>⚡&nbsp;<strong>Recommended focus areas for review</strong><br><br>
 
-            <a href='{reference_link}'><strong>Code Smell</strong></a><br>The function is too long and complex.
+            {issue_line}
 
             </td></tr>
             </table>
@@ -194,7 +198,7 @@ class TestConvertToMarkdown:
 
         output = convert_to_markdown_v2(input_data)
 
-        assert '<strong></strong><br>The function needs review.' in output
+        assert '<strong></strong> <em>src/utils.py:30-50</em><br>The function needs review.' in output
 
     def test_ticket_compliance(self):
         input_data = {'review': {
