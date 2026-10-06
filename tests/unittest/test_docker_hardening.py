@@ -10,7 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SERVICE_TARGETS = (
     "github_app", "bitbucket_app", "bitbucket_server_webhook", "github_polling",
-    "gitlab_webhook", "azure_devops_webhook", "gitea_app", "mosaico_agent",
+    "gitlab_webhook", "gitlab_polling", "azure_devops_webhook", "gitea_app", "mosaico_agent",
 )
 
 

@@ -392,6 +392,11 @@ push_commands = [
     "/describe",
     "/review",
 ]
+# Polling configuration for the standalone gitlab_polling server (see docs/docs/installation/gitlab.md)
+polling_interval = 30  # Seconds to wait between poll cycles; lower values increase GitLab API usage.
+polling_projects = []  # Projects to poll, in "group/project" form (e.g. ["group/project-a", "group/project-b"])
+polling_data_dir = "/var/lib/pr-agent-poller"  # Directory for per-project state files and the leader lock; use a persistent path in production
+polling_max_comment_retries = 2  # Automatic retries for a failed command comment before it stays marked with eyes; delete the eyes reaction to re-queue it
 # Configure SSL validation for GitLab. Can be either set to the path of a custom CA or disabled entirely.
 # ssl_verify = true
 # Auto-trigger commands when the bot is assigned as a reviewer on an MR

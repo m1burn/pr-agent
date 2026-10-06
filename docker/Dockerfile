@@ -60,6 +60,14 @@ FROM service AS azure_devops_webhook
 COPY pr_agent pr_agent
 CMD ["python", "pr_agent/servers/azuredevops_server_webhook.py"]
 
+FROM service AS gitlab_polling
+COPY pr_agent pr_agent
+# The poller writes per-project state and its leader lock under the configured
+# polling_data_dir (default below), so that path must be writable by the
+# non-root service identity; deployments usually mount a dedicated volume here.
+RUN mkdir -p /var/lib/pr-agent-poller && chown 10001:10001 /var/lib/pr-agent-poller
+CMD ["python", "pr_agent/servers/gitlab_polling.py"]
+
 FROM service AS gitea_app
 COPY pr_agent pr_agent
 CMD ["python", "-m", "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-c", "pr_agent/servers/gunicorn_config.py","pr_agent.servers.gitea_app:app"]
