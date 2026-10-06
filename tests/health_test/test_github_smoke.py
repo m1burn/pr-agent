@@ -107,9 +107,19 @@ async def _run_smoke() -> None:
 
 def test_github_describe_smoke():
     global_settings.get("config")  # force the lazy load before copying settings
+    failure = None
     with request_cycle_context({}):
         context['settings'] = copy.deepcopy(global_settings)
-        asyncio.run(_run_smoke())
+        # request_cycle_context (starlette-context 0.3.6) resets its contextvar
+        # only on a clean exit: an exception escaping this block would leave the
+        # request-scoped settings copy active for every later test in the run.
+        # Swallow here, then re-raise outside so the context is always closed.
+        try:
+            asyncio.run(_run_smoke())
+        except BaseException as exc:
+            failure = exc
+    if failure is not None:
+        raise failure
 
 
 if __name__ == '__main__':
