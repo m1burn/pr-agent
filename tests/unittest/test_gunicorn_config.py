@@ -93,11 +93,18 @@ class TestAvailableCpus:
         assert gunicorn_config.available_cpus() == 1
 
 
-@pytest.mark.parametrize("port,expected", [(None, "3000"), ("", "3000"), ("8080", "8080")])
+@pytest.mark.parametrize("port,expected", [(None, "3000"), ("8080", "8080")])
 def test_bind_uses_port_or_default(monkeypatch, port, expected):
     if port is not None:
         monkeypatch.setenv("PORT", port)
     assert runpy.run_path(gunicorn_config.__file__)["bind"] == f"0.0.0.0:{expected}"
+
+
+@pytest.mark.parametrize("port", ["", "abc"])
+def test_bind_rejects_a_non_integer_port(monkeypatch, port):
+    monkeypatch.setenv("PORT", port)
+    with pytest.raises(ValueError):
+        runpy.run_path(gunicorn_config.__file__)
 
 
 class TestComputeWorkers:
